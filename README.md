@@ -146,7 +146,7 @@ This tool is for personal use only. Please ensure you comply with Uber's terms o
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome. Feel free to check [issues page](link-to-your-issues-page) if you want to contribute.
+Contributions, issues, and feature requests are welcome. Feel free to check [issues page](https://github.com/dmahlow/uber-receipt-downloader/issues) if you want to contribute.
 
 ## License
 
