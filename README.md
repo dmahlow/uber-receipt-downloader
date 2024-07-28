@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This tool allows Uber users to bulk download their ride receipts as PDF files for a specified date range. It's particularly useful for expense reporting, accounting, or personal record-keeping purposes.
+This tool allows Uber users to bulk download their ride receipts as PDF files for a specified date range, as Uber makes it very cumbersome and difficult to do so on their website. It's particularly useful for expense reporting, accounting, or personal record-keeping purposes.
 
 ## Features
 
