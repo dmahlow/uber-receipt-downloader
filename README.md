@@ -13,8 +13,8 @@ This tool allows Uber users to bulk download their ride receipts as PDF files fo
 
 ## Prerequisites
 
-- Python 3.7 or higher
-- `requests` library
+- Python 3.8 or higher
+- `requests` and `python-dotenv` libraries
 
 ## Setup
 
