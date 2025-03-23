@@ -6,6 +6,10 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 UBER_API = "https://riders.uber.com"
 
@@ -32,12 +36,16 @@ query Activities($endTimeMs: Float, $limit: Int = 10, $nextPageToken: String, $s
 
 def uber_request(data: dict) -> dict:
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
         "Accept": "*/*",
         "content-type": "application/json",
         "x-csrf-token": "x",
+        "x-uber-rv-session-type": "desktop_session",
         "Origin": "https://riders.uber.com",
-        "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}',
+        "Referer": "https://riders.uber.com/trips",
+        "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}; '
+                  f'jwt-session={os.environ.get("cookie_jwt", "")}; '
+                  f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}',
     }
     response = requests.post(f"{UBER_API}/graphql", headers=headers, json=data)
     response.raise_for_status()
@@ -61,7 +69,13 @@ def download_receipt(trip_uuid: str, trip_date: str, outdir: Path) -> None:
     try:
         response = requests.get(
             f"{UBER_API}/trips/{trip_uuid}/receipt?contentType=PDF",
-            headers={"Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}'}
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+                "Referer": "https://riders.uber.com/trips",
+                "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}; '
+                          f'jwt-session={os.environ.get("cookie_jwt", "")}; '
+                          f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}'
+            }
         )
         response.raise_for_status()
         filename.write_bytes(response.content)
@@ -115,7 +129,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if not os.environ.get("cookie_sid") or not os.environ.get("cookie_csid"):
-        print("Please set cookie_sid and cookie_csid environment variables.")
+        print("Please set required cookie values in the .env file. See .env.example for template.")
         sys.exit(1)
 
     main(args.outdir, args.from_date, args.to_date)

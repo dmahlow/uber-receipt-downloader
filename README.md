@@ -20,24 +20,29 @@ This tool allows Uber users to bulk download their ride receipts as PDF files fo
 
 1. Clone this repository or download the `uber-receipts.py` script.
 
-2. Install the required Python package:
+2. Install the required Python packages:
    ```
-   pip install requests
-   ```
-
-3. Set up your Uber session cookies as environment variables. You'll need to extract these from your browser after logging into your Uber account:
-   ```
-   export cookie_sid=your_sid_cookie_value
-   export cookie_csid=your_csid_cookie_value
+   pip install requests python-dotenv
    ```
 
-   Note: These cookies are sensitive information. Do not share them or commit them to version control.
+   Or with uv:
+   ```
+   uv add requests python-dotenv
+   ```
 
-## Setting Up Uber Session Cookies
+3. Create a `.env` file in the same directory as the script based on the provided `.env.example`:
+   ```
+   cookie_sid=your_sid_cookie_value
+   cookie_csid=your_csid_cookie_value
+   cookie_jwt=your_jwt_session_value
+   cookie_geoip=your_geoip_city_id_value
+   ```
 
-To use this script, you need to provide your Uber session cookies. Here's how to obtain and set them:
+   Note: These cookies are sensitive information. Do not share them or commit the `.env` file to version control.
 
-### Obtaining the Cookies
+## Obtaining Uber Session Cookies
+
+To use this script, you need to provide your Uber session cookies. Here's how to obtain them:
 
 1. Open your web browser (Chrome, Firefox, or Safari recommended).
 2. Go to [https://riders.uber.com/](https://riders.uber.com/) and log in to your Uber account.
@@ -45,58 +50,15 @@ To use this script, you need to provide your Uber session cookies. Here's how to
    - Chrome/Firefox: Right-click anywhere on the page and select "Inspect", then go to the "Network" tab.
    - Safari: Enable the Develop menu in Preferences > Advanced, then select Develop > Show Web Inspector > Network.
 4. With the Network tab open, refresh the page.
-5. In the Network tab, filter for "riders.uber.com".
-6. Click on any request to riders.uber.com and look for the "Cookie" header in the request headers.
-7. In the Cookie header, find the values for `sid` and `csid`. They will look something like this:
-   ```
-   sid=AbCdEfGhIjKlMnOp1234567890; csid=1234567890-AbCdEfGhIjKlMnOp;
-   ```
+5. In the Network tab, filter for "graphql" requests to riders.uber.com.
+6. Click on any request and look for the "Cookie" header in the request headers.
+7. In the Cookie header, find the values for the required cookies:
+   - `sid` - The main session ID
+   - `csid` - Client session ID
+   - `jwt-session` - JSON Web Token session
+   - `GEOIP_CITY_ID_COOKIE` - Geographic location ID
 
-### Setting the Environment Variables
-
-Once you have the cookie values, you need to set them as environment variables. Here's how to do it:
-
-#### On Unix-based systems (macOS, Linux):
-
-1. Open your terminal.
-2. Set the environment variables using the export command:
-   ```
-   export cookie_sid=AbCdEfGhIjKlMnOp1234567890
-   export cookie_csid=1234567890-AbCdEfGhIjKlMnOp
-   ```
-3. You can add these lines to your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`) to make them persistent across terminal sessions.
-
-#### On Windows:
-
-1. Open Command Prompt or PowerShell as an administrator.
-2. Set the environment variables using the setx command:
-   ```
-   setx cookie_sid AbCdEfGhIjKlMnOp1234567890
-   setx cookie_csid 1234567890-AbCdEfGhIjKlMnOp
-   ```
-3. Note that you'll need to restart your command prompt or PowerShell for the changes to take effect.
-
-### Verifying the Environment Variables
-
-To verify that the environment variables are set correctly:
-
-- On Unix-based systems, use the echo command:
-  ```
-  echo $cookie_sid
-  echo $cookie_csid
-  ```
-- On Windows, use the echo command in Command Prompt:
-  ```
-  echo %cookie_sid%
-  echo %cookie_csid%
-  ```
-  Or in PowerShell:
-  ```
-  echo $env:cookie_sid
-  echo $env:cookie_csid
-  ```
-
-Make sure these values match the cookies you obtained from your browser.
+8. Copy these values to your `.env` file.
 
 ### Important Notes
 
