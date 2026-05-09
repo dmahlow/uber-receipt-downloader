@@ -34,6 +34,37 @@ query Activities($endTimeMs: Float, $limit: Int = 10, $nextPageToken: String, $s
 }
 """
 
+def interactive_login() -> None:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("Error: Playwright is required for interactive login.")
+        print("Please install it by running: pip install playwright && playwright install chromium")
+        sys.exit(1)
+        
+    print("Opening an incognito browser window. Please log in to Uber...")
+    with sync_playwright() as p:
+        # Launch headful browser so user can interact with 2FA/Captchas
+        browser = p.chromium.launch(headless=False)
+        # Playwright creates a fresh, incognito context by default
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto("https://riders.uber.com/")
+        
+        print("Waiting for you to complete login... (monitoring for 'sid' cookie)")
+        while True:
+            cookies = {c['name']: c['value'] for c in context.cookies()}
+            if 'sid' in cookies and 'csid' in cookies:
+                break
+            page.wait_for_timeout(1000)
+            
+        print("Login successful! Capturing cookies...")
+        os.environ["cookie_sid"] = cookies.get("sid", "")
+        os.environ["cookie_csid"] = cookies.get("csid", "")
+        os.environ["cookie_jwt"] = cookies.get("jwt-session", "")
+        os.environ["cookie_geoip"] = cookies.get("GEOIP_CITY_ID_COOKIE", "")
+        browser.close()
+
 def uber_request(data: dict) -> dict:
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
@@ -43,11 +74,23 @@ def uber_request(data: dict) -> dict:
         "x-uber-rv-session-type": "desktop_session",
         "Origin": "https://riders.uber.com",
         "Referer": "https://riders.uber.com/trips",
-        "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}; '
+        "Cookie": f'sid={os.environ.get("cookie_sid", "")}; csid={os.environ.get("cookie_csid", "")}; '
                   f'jwt-session={os.environ.get("cookie_jwt", "")}; '
                   f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}',
     }
     response = requests.post(f"{UBER_API}/graphql", headers=headers, json=data)
+
+    if "auth.uber.com" in response.url:
+        print("Session expired. Triggering interactive login...")
+        interactive_login()
+        headers["Cookie"] = (f'sid={os.environ.get("cookie_sid", "")}; csid={os.environ.get("cookie_csid", "")}; '
+                             f'jwt-session={os.environ.get("cookie_jwt", "")}; '
+                             f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}')
+        response = requests.post(f"{UBER_API}/graphql", headers=headers, json=data)
+        if "auth.uber.com" in response.url:
+            print("Error: Authentication failed even after login.")
+            sys.exit(1)
+
     response.raise_for_status()
     return response.json()
 
@@ -67,16 +110,26 @@ def get_activities(next_page_token: str, start_time_ms: int, end_time_ms: int) -
 def download_receipt(trip_uuid: str, trip_date: str, outdir: Path) -> None:
     filename = outdir / f"{trip_date}_{trip_uuid}.pdf"
     try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+            "Referer": "https://riders.uber.com/trips",
+            "Cookie": f'sid={os.environ.get("cookie_sid", "")}; csid={os.environ.get("cookie_csid", "")}; '
+                      f'jwt-session={os.environ.get("cookie_jwt", "")}; '
+                      f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}'
+        }
         response = requests.get(
             f"{UBER_API}/trips/{trip_uuid}/receipt?contentType=PDF",
-            headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
-                "Referer": "https://riders.uber.com/trips",
-                "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}; '
-                          f'jwt-session={os.environ.get("cookie_jwt", "")}; '
-                          f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}'
-            }
+            headers=headers
         )
+        
+        if "auth.uber.com" in response.url:
+            print("Session expired during download. Triggering interactive login...")
+            interactive_login()
+            headers["Cookie"] = (f'sid={os.environ.get("cookie_sid", "")}; csid={os.environ.get("cookie_csid", "")}; '
+                                 f'jwt-session={os.environ.get("cookie_jwt", "")}; '
+                                 f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}')
+            response = requests.get(f"{UBER_API}/trips/{trip_uuid}/receipt?contentType=PDF", headers=headers)
+
         response.raise_for_status()
         filename.write_bytes(response.content)
         print(f"Downloaded receipt: {filename}")
@@ -110,7 +163,21 @@ def main(outdir: str, from_date: str, to_date: str) -> None:
 
             for activity in past_activities:
                 trip_uuid = activity["uuid"]
-                trip_date = activity["subtitle"].split(" • ")[0]
+                raw_date = activity["subtitle"].split(" • ")[0]
+                
+                try:
+                    # Try parsing date with year (e.g., "Dec 3, 2022")
+                    parsed_dt = datetime.strptime(raw_date, "%b %d, %Y")
+                    trip_date = parsed_dt.strftime("%Y-%m-%d")
+                except ValueError:
+                    try:
+                        # Try parsing date without year (e.g., "Dec 3")
+                        parsed_dt = datetime.strptime(raw_date, "%b %d")
+                        trip_date = parsed_dt.replace(year=current_month.year).strftime("%Y-%m-%d")
+                    except ValueError:
+                        # Fallback to the original string if parsing fails
+                        trip_date = raw_date
+
                 download_receipt(trip_uuid, trip_date, outdir_path)
                 time.sleep(1)
 
@@ -129,7 +196,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if not os.environ.get("cookie_sid") or not os.environ.get("cookie_csid"):
-        print("Please set required cookie values in the .env file. See .env.example for template.")
-        sys.exit(1)
+        interactive_login()
 
     main(args.outdir, args.from_date, args.to_date)
