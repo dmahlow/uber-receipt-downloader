@@ -34,6 +34,26 @@ query Activities($endTimeMs: Float, $limit: Int = 10, $nextPageToken: String, $s
 }
 """
 
+def build_cookie_string() -> str:
+    """Build cookie string from environment variables."""
+    # Support full cookie string override
+    if os.environ.get("cookie_full"):
+        return os.environ["cookie_full"]
+
+    cookies = [
+        f'sid={os.environ["cookie_sid"]}',
+        f'csid={os.environ["cookie_csid"]}',
+        f'jwt-session={os.environ.get("cookie_jwt", "")}',
+        f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}',
+    ]
+    # Add optional cookies that help with authentication
+    if os.environ.get("cookie_udi_id"):
+        cookies.append(f'udi-id={os.environ["cookie_udi_id"]}')
+    if os.environ.get("cookie_cf_bm"):
+        cookies.append(f'__cf_bm={os.environ["cookie_cf_bm"]}')
+
+    return "; ".join(cookies)
+
 def uber_request(data: dict) -> dict:
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
@@ -43,9 +63,7 @@ def uber_request(data: dict) -> dict:
         "x-uber-rv-session-type": "desktop_session",
         "Origin": "https://riders.uber.com",
         "Referer": "https://riders.uber.com/trips",
-        "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}; '
-                  f'jwt-session={os.environ.get("cookie_jwt", "")}; '
-                  f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}',
+        "Cookie": build_cookie_string(),
     }
     response = requests.post(f"{UBER_API}/graphql", headers=headers, json=data)
     response.raise_for_status()
@@ -72,9 +90,7 @@ def download_receipt(trip_uuid: str, trip_date: str, outdir: Path) -> None:
             headers={
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
                 "Referer": "https://riders.uber.com/trips",
-                "Cookie": f'sid={os.environ["cookie_sid"]}; csid={os.environ["cookie_csid"]}; '
-                          f'jwt-session={os.environ.get("cookie_jwt", "")}; '
-                          f'GEOIP_CITY_ID_COOKIE={os.environ.get("cookie_geoip", "")}'
+                "Cookie": build_cookie_string()
             }
         )
         response.raise_for_status()
@@ -128,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("--to", dest="to_date", required=True, help="End date (YYYYMMDD)")
     args = parser.parse_args()
 
-    if not os.environ.get("cookie_sid") or not os.environ.get("cookie_csid"):
+    if not os.environ.get("cookie_full") and (not os.environ.get("cookie_sid") or not os.environ.get("cookie_csid")):
         print("Please set required cookie values in the .env file. See .env.example for template.")
         sys.exit(1)
 
